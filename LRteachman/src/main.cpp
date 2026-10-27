@@ -1,70 +1,66 @@
+
 #include <Arduino.h>
-#include <Servo.h>
+#include <Wire.h>
+#include <PCA9685.h>
 
-Servo myServo;
+PCA9685 pwm(0x40);
 
-const int servoPin = 9;
-const int button0 = 3;
-const int button180 = 2;
+const int SERVO_MIN = 102;
+const int SERVO_MAX = 512;
+const int SERVO_COUNT = 4;
 
-const unsigned long randomDuration = 0; // ランダム動作時間
+// 各サーボの往復設定
+struct ServoConfig {
+    int angleA;                  // 往復する角度A
+    int angleB;                  // 往復する角度B
+    unsigned long interval;      // 角度を切り替える間隔(ms)
+};
 
-bool moving = false;
-int targetAngle = 90;
+ServoConfig config[SERVO_COUNT] = {
+    { 5, 135, 5000 },  // サーボ0：0度 ⇔ 90度、1秒ごと
+    { 172, 42, 5000 },  // サーボ1：45度 ⇔ 135度、1.5秒ごと
+    { 177, 165, 5000 },  // サーボ2：30度 ⇔ 150度、2秒ごと
+    { 3, 15, 5000 }   // サーボ3：60度 ⇔ 120度、0.5秒ごと
+};
 
-unsigned long startTime = 0;
-unsigned long lastMoveTime = 0;
+bool atAngleB[SERVO_COUNT] = {false, false, false, false};
+unsigned long lastMove[SERVO_COUNT] = {0};
+
+void servoWrite(int channel, int angle) {
+    angle = constrain(angle, 0, 180);
+    int pulse = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
+    pwm.setPWM(channel, 0, pulse);
+}
 
 void setup() {
-  myServo.attach(servoPin,500, 2500); //sf90には500～2500の範囲で書き込む必要がある
-  //myServo.attach(servoPin);
+    Serial.begin(115200);
+    Wire.begin();
 
-  pinMode(button0, INPUT_PULLUP);
-  pinMode(button180, INPUT_PULLUP);
+    pwm.begin();
+    pwm.setPWMFreq(50);
 
-  myServo.write(90);
+    delay(500);
 
-  randomSeed(analogRead(A0));
+    // 起動時は全サーボを角度Aにする
+    for (int ch = 0; ch < SERVO_COUNT; ch++) {
+        servoWrite(ch, config[ch].angleA);
+        lastMove[ch] = millis();
+    }
 }
 
 void loop() {
+    unsigned long now = millis();
 
-  // ランダム動作中
-  if (moving) {
+    for (int ch = 0; ch < SERVO_COUNT; ch++) {
+        if (now - lastMove[ch] >= config[ch].interval) {
+            atAngleB[ch] = !atAngleB[ch];
 
-    // 一定間隔でランダムな角度へ移動
-    if (millis() - lastMoveTime >= 100) {
-      int randomAngle = random(0, 181);
-      myServo.write(randomAngle);
-      lastMoveTime = millis();
+            int angle = atAngleB[ch]
+                ? config[ch].angleB
+                : config[ch].angleA;
+
+            servoWrite(ch, angle);
+            lastMove[ch] = now;
+        }
     }
-
-    // 3秒経過したら設定角度へ
-    if (millis() - startTime >= randomDuration) {
-      myServo.write(targetAngle);
-      moving = false;
-    }
-
-    return;
-  }
-
-  // D2 → 最終的に0°
-  if (digitalRead(button0) == LOW) {
-    targetAngle = 0;
-    moving = true;
-    startTime = millis();
-    lastMoveTime = millis();
-
-    delay(200); // ボタンのチャタリング対策
-  }
-
-  // D3 → 最終的に180°
-  else if (digitalRead(button180) == LOW) {
-    targetAngle = 180;
-    moving = true;
-    startTime = millis();
-    lastMoveTime = millis();
-
-    delay(200);
-  }
 }
