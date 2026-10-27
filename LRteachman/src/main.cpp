@@ -9,22 +9,37 @@ const int SERVO_MIN = 102;
 const int SERVO_MAX = 512;
 const int SERVO_COUNT = 4;
 
-// 各サーボの往復設定
+// サーボごとのボタンピン
+const int BUTTON_PIN = 2;
+
+// 移動速度
+const int ANGLE_STEP = 1;
+const unsigned long MOVE_INTERVAL = 50;
+
+// サーボごとの角度A・角度B
 struct ServoConfig {
-    int angleA;                  // 往復する角度A
-    int angleB;                  // 往復する角度B
-    unsigned long interval;      // 角度を切り替える間隔(ms)
+    int angleA;
+    int angleB;
 };
 
 ServoConfig config[SERVO_COUNT] = {
-    { 5, 135, 5000 },  // サーボ0：0度 ⇔ 90度、1秒ごと
-    { 172, 42, 5000 },  // サーボ1：45度 ⇔ 135度、1.5秒ごと
-    { 177, 165, 5000 },  // サーボ2：30度 ⇔ 150度、2秒ごと
-    { 3, 15, 5000 }   // サーボ3：60度 ⇔ 120度、0.5秒ごと
+    { 5, 135},  //　↖
+    { 172, 42},  //　↗
+    { 177, 165},  //　↙
+    { 3, 15}   //　↘
 };
 
-bool atAngleB[SERVO_COUNT] = {false, false, false, false};
-unsigned long lastMove[SERVO_COUNT] = {0};
+int currentAngle[SERVO_COUNT] = {0, 45, 30, 60};
+int targetAngle[SERVO_COUNT]  = {0, 45, 30, 60};
+
+unsigned long lastStep[SERVO_COUNT] = {0};
+
+bool atAngleB = false;
+bool lastButtonState = HIGH;
+unsigned long lastButtonTime = 0;
+
+const unsigned long DEBOUNCE_MS = 30;
+
 
 void servoWrite(int channel, int angle) {
     angle = constrain(angle, 0, 180);
@@ -38,29 +53,66 @@ void setup() {
 
     pwm.begin();
     pwm.setPWMFreq(50);
-
     delay(500);
 
-    // 起動時は全サーボを角度Aにする
+    pinMode(BUTTON_PIN, INPUT_PULLUP);
+
     for (int ch = 0; ch < SERVO_COUNT; ch++) {
+        currentAngle[ch] = config[ch].angleA;
+        targetAngle[ch] = config[ch].angleA;
         servoWrite(ch, config[ch].angleA);
-        lastMove[ch] = millis();
+        lastStep[ch] = millis();
     }
+
+    delay(1000);
 }
 
 void loop() {
     unsigned long now = millis();
 
-    for (int ch = 0; ch < SERVO_COUNT; ch++) {
-        if (now - lastMove[ch] >= config[ch].interval) {
-            atAngleB[ch] = !atAngleB[ch];
+    // ボタン入力
+    bool buttonState = digitalRead(BUTTON_PIN);
 
-            int angle = atAngleB[ch]
+    if (buttonState == LOW &&
+        lastButtonState == HIGH &&
+        now - lastButtonTime >= DEBOUNCE_MS) {
+
+        atAngleB = !atAngleB;
+
+        for (int ch = 0; ch < SERVO_COUNT; ch++) {
+            targetAngle[ch] = atAngleB
                 ? config[ch].angleB
                 : config[ch].angleA;
+        }
 
-            servoWrite(ch, angle);
-            lastMove[ch] = now;
+        lastButtonTime = now;
+    }
+
+    lastButtonState = buttonState;
+
+    // 全サーボを少しずつ目標角度へ動かす
+    for (int ch = 0; ch < SERVO_COUNT; ch++) {
+        if (now - lastStep[ch] >= MOVE_INTERVAL) {
+            if (currentAngle[ch] < targetAngle[ch]) {
+                currentAngle[ch] += ANGLE_STEP;
+
+                if (currentAngle[ch] > targetAngle[ch]) {
+                    currentAngle[ch] = targetAngle[ch];
+                }
+
+                servoWrite(ch, currentAngle[ch]);
+            }
+            else if (currentAngle[ch] > targetAngle[ch]) {
+                currentAngle[ch] -= ANGLE_STEP;
+
+                if (currentAngle[ch] < targetAngle[ch]) {
+                    currentAngle[ch] = targetAngle[ch];
+                }
+
+                servoWrite(ch, currentAngle[ch]);
+            }
+
+            lastStep[ch] = now;
         }
     }
 }
