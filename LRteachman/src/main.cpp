@@ -14,7 +14,7 @@ const int BUTTON_PIN = 2;
 
 // 移動速度
 const int ANGLE_STEP = 1;
-const unsigned long MOVE_INTERVAL = 50;
+const unsigned long MOVE_INTERVAL = 20;
 
 // サーボごとの角度A・角度B
 struct ServoConfig {
