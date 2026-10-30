@@ -7,7 +7,7 @@ PCA9685 pwm(0x40);
 
 const int SERVO_MIN = 102;
 const int SERVO_MAX = 512;
-const int SERVO_COUNT = 4;
+const int SERVO_COUNT = 5;
 
 // サーボごとのボタンピン
 const int BUTTON_PIN = 2;
@@ -26,11 +26,12 @@ ServoConfig config[SERVO_COUNT] = {
     { 5, 135},  //　↖
     { 172, 42},  //　↗
     { 177, 165},  //　↙
-    { 3, 15}   //　↘
+    { 3, 15},   //　↘
+    { 0, 180 }
 };
 
-int currentAngle[SERVO_COUNT] = {0, 45, 30, 60};
-int targetAngle[SERVO_COUNT]  = {0, 45, 30, 60};
+int currentAngle[SERVO_COUNT] = {0, 45, 30, 60, 0};
+int targetAngle[SERVO_COUNT]  = {0, 45, 30, 60, 0};
 
 unsigned long lastStep[SERVO_COUNT] = {0};
 
