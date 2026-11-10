@@ -16,7 +16,7 @@ const int BUTTON_B = 3;
 
 // 移動速度
 const int ANGLE_STEP = 1;
-const unsigned long MOVE_INTERVAL = 20;
+const unsigned long MOVE_INTERVAL = 10;
 
 // 角度B到達後、角度Aに戻るまでの時間
 const unsigned long RETURN_DELAY = 6000;
@@ -67,6 +67,10 @@ void servoWrite(int channel, int angle) {
 
     int pulse = map(angle, 0, 180, SERVO_MIN, SERVO_MAX);
     pwm.setPWM(channel, 0, pulse);
+}
+
+void servoStop(int channel) {
+    pwm.setPWM(channel, 0, 0);
 }
 
 // サーボ0〜3の移動完了判定
@@ -157,29 +161,36 @@ void loop() {
     for (int ch = 0; ch < SERVO_COUNT; ch++) {
         if (now - lastStep[ch] >= MOVE_INTERVAL) {
 
-            if (currentAngle[ch] < targetAngle[ch]) {
-                currentAngle[ch] += ANGLE_STEP;
-
-                if (currentAngle[ch] > targetAngle[ch]) {
-                    currentAngle[ch] = targetAngle[ch];
-                }
-            }
-            else if (currentAngle[ch] > targetAngle[ch]) {
-                currentAngle[ch] -= ANGLE_STEP;
+            if (currentAngle[ch] != targetAngle[ch]) {
 
                 if (currentAngle[ch] < targetAngle[ch]) {
-                    currentAngle[ch] = targetAngle[ch];
-                }
-            }
+                    currentAngle[ch] += ANGLE_STEP;
 
-            if (currentAngle[ch] != targetAngle[ch] ||
-                motionState != IDLE) {
+                    if (currentAngle[ch] > targetAngle[ch]) {
+                        currentAngle[ch] = targetAngle[ch];
+                    }
+                }
+                else {
+                    currentAngle[ch] -= ANGLE_STEP;
+
+                    if (currentAngle[ch] < targetAngle[ch]) {
+                        currentAngle[ch] = targetAngle[ch];
+                    }
+                }
+
                 servoWrite(ch, currentAngle[ch]);
+
+                // 目標角度に到達したらPWMを停止
+                if (currentAngle[ch] == targetAngle[ch]) {
+                    delay(10); // 少し待ってから停止
+                    servoStop(ch);
+                }
             }
 
             lastStep[ch] = now;
         }
     }
+
 
     // 4個のサーボが角度Bに到達
     if (motionState == MOVING_TO_B &&
